@@ -17,7 +17,7 @@ class BoW(nn.Module):
         self.softmax = nn.Softmax()
         self.embedding = embedding
 
-    def forward(self, document,quesion,hidden_size):
+    def forward(self, document,question,hidden_size):
         '''
 
         :param document:
@@ -32,8 +32,8 @@ class BoW(nn.Module):
 
         :return:
         '''
-        quesion_ids = quesion.expand(document.size(0),quesion(1))
-        bow_x = torch.mean(self.embedding(quesion_ids),1)
+        question = question.expand(document.size(0),question.size(0))
+        bow_x = torch.mean(self.embedding(question),1)
         bow_s = torch.mean(self.embedding(document),1)
 
         h = torch.cat((bow_x,bow_s),1)
@@ -58,19 +58,18 @@ class EncoderRNN(nn.Module):
         self.n_layers = n_layers
         self.hidden_size = hidden_size
 
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.gru = nn.GRU(input_size, hidden_size)
 
     def forward(self, input, hidden):
-        word_lens = len(input)
+        word_lens = input.size(0)
         # we run this at once(over the whole input sequcnce)
-        embedded = self.embedding(input).view(word_lens, 1, -1)
+        embedded = input.view(word_lens, 1, -1)
         outputs,hidden = self.gru(embedded,hidden)
         return outputs,hidden
 
-    def initHidden(self):
+    def initHidden(self,use_cuda):
         result = Variable(torch.zeros(1, 1, self.hidden_size))
-        return result.cuda()
+        return result.cuda() if use_cuda else result
 
 class DecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size, n_layers=1):
@@ -90,9 +89,9 @@ class DecoderRNN(nn.Module):
         output = self.softmax(self.out(output[0]))
         return output, hidden
 
-    def initHidden(self):
+    def initHidden(self,use_cuda):
         result = Variable(torch.zeros(1, 1, self.hidden_size))
-        return result.cuda()
+        return result.cuda() if use_cuda else result
 
 class EncoderModel(nn.Module):
     def __init__(self,emb_path,emb_size,bow_hidden_size,hidden_size):
@@ -101,22 +100,22 @@ class EncoderModel(nn.Module):
         self.hidden_size = hidden_size
 
         embeddings = np.load(emb_path)['glove']
-        self.embedding = nn.Embedding(embeddings.size(0), embeddings.size(1))
-        self.embedding.weight = nn.Parameter(embeddings)
+        self.embedding = nn.Embedding(embeddings.shape[0], embeddings.shape[1])
+        self.embedding.weight.data.copy_(torch.from_numpy(embeddings))
 
         self.bow = BoW(emb_size,bow_hidden_size,self.embedding)
         self.soft_attention = DocumentSummary()
         # input is embeddings dimension
-        self.encoder = EncoderRNN(embeddings.size(1),hidden_size)
+        self.encoder = EncoderRNN(embeddings.shape[1],hidden_size)
         # output is vocabulary size
         #self.decoder = DecoderRNN(hidden_size,embeddings.size(0))
 
-    def forward(self, document,question,answer):
+    def forward(self, document,question,answer,use_cuda):
 
         probability = self.bow(document,question,self.hidden_size)
         summary = self.soft_attention(probability,self.embedding(document))
         # the encoder input is question and document summary
-        _,encoder_hidden = self.encoder([question,summary],self.encoder.initHidden())
+        _,encoder_hidden = self.encoder(torch.cat([self.embedding(question),summary],0),self.encoder.initHidden(use_cuda))
         # the decoder input is answer and encoder_hidden
         #output,_ = self.decoder(answer,encoder_hidden)
 
