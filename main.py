@@ -131,6 +131,7 @@ def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
     plot_losses = []
+    illed_sample_num = 0
 
     with open('./data/validation-0.json','r') as js_file:
 
@@ -138,13 +139,18 @@ def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,
 
         n_iters = len(file_list)
 
-        for idx,sample in enumerate(file_list):
+        for idx,sample in enumerate(file_list,1):
 
             dict_sample = json.loads(sample)
             # use docuement vocab
             answer = dict_sample['answer_sequence']
             question = dict_sample['question_sequence']
             document = dict_sample['document_sequence']
+
+            # skip illed sample
+            if len(document) == 0 or len(answer) == 0 or len(question) == 0:
+                illed_sample_num += 1
+                continue
 
             sentence_breaks = dict_sample['sentence_breaks']
             paragraph_breaks = dict_sample['paragraph_breaks']
@@ -169,8 +175,8 @@ def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,
             if idx % print_every == 0:
                 print_loss_avg = print_loss_total / print_every
                 print_loss_total = 0
-                print('%s (%d %d%%) %.4f' % (timeSince(start, idx / n_iters),
-                                             idx, idx / n_iters * 100, print_loss_avg))
+                print('%s (%d %d%%) %.4f' % (timeSince(start, float(idx) / n_iters),
+                                             idx, float(idx) / n_iters * 100, print_loss_avg))
 
             if idx % plot_every == 0:
                 plot_loss_avg = plot_loss_total / plot_every
@@ -178,6 +184,7 @@ def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,
                 plot_loss_total = 0
 
         showPlot(plot_losses)
+        logger.info("Illed sample number: {}".format(illed_sample_num))
 
 def showPlot(points):
     plt.figure()
