@@ -72,21 +72,23 @@ class EncoderRNN(nn.Module):
         return result.cuda() if use_cuda else result
 
 class DecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size, n_layers=1):
+    def __init__(self, embeddings,input_size,hidden_size, output_size, n_layers=1):
         super(DecoderRNN, self).__init__()
         self.n_layers = n_layers
         self.hidden_size = hidden_size
 
-        self.embedding = nn.Embedding(output_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.embedding = nn.Embedding(embeddings.shape[0], embeddings.shape[1])
+        self.embedding.weight.data.copy_(torch.from_numpy(embeddings))
+
+        self.gru = nn.GRU(input_size, hidden_size)
         self.out = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax()
+        self.log_softmax = nn.LogSoftmax()
 
     def forward(self, input, hidden):
         output = self.embedding(input).view(1, 1, -1)
         for i in range(self.n_layers):
             output, hidden = self.gru(output, hidden)
-        output = self.softmax(self.out(output[0]))
+        output = self.log_softmax(self.out(output[0]))
         return output, hidden
 
     def initHidden(self,use_cuda):
@@ -94,21 +96,18 @@ class DecoderRNN(nn.Module):
         return result.cuda() if use_cuda else result
 
 class EncoderModel(nn.Module):
-    def __init__(self,emb_path,emb_size,bow_hidden_size,hidden_size):
+    def __init__(self,embeddings,bow_hidden_size,hidden_size):
         super(EncoderModel, self).__init__()
 
         self.hidden_size = hidden_size
 
-        embeddings = np.load(emb_path)['glove']
         self.embedding = nn.Embedding(embeddings.shape[0], embeddings.shape[1])
         self.embedding.weight.data.copy_(torch.from_numpy(embeddings))
 
-        self.bow = BoW(emb_size,bow_hidden_size,self.embedding)
+        self.bow = BoW(embeddings.shape[1],bow_hidden_size,self.embedding)
         self.soft_attention = DocumentSummary()
         # input is embeddings dimension
         self.encoder = EncoderRNN(embeddings.shape[1],hidden_size)
-        # output is vocabulary size
-        #self.decoder = DecoderRNN(hidden_size,embeddings.size(0))
 
     def forward(self, document,question,answer,use_cuda):
 
@@ -116,7 +115,5 @@ class EncoderModel(nn.Module):
         summary = self.soft_attention(probability,self.embedding(document))
         # the encoder input is question and document summary
         _,encoder_hidden = self.encoder(torch.cat([self.embedding(question),summary],0),self.encoder.initHidden(use_cuda))
-        # the decoder input is answer and encoder_hidden
-        #output,_ = self.decoder(answer,encoder_hidden)
 
         return encoder_hidden
