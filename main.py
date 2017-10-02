@@ -173,29 +173,13 @@ def evaluateRandomly(encoder, id2word,decoder,use_cuda,num2eval=10):
         for _ in range(num2eval):
 
             sample = random.choice(file_list)
-
             dict_sample = json.loads(sample)
-            # use docuement vocab
-            answer = dict_sample['answer_sequence']
-            question = dict_sample['question_sequence']
-            document = dict_sample['document_sequence']
+
+            document,sentences,question,answer = prepare_sample(sample)
 
             # skip illed sample
             if len(document) == 0 or len(answer) == 0 or len(question) == 0:
                 continue
-
-            sentence_breaks = dict_sample['sentence_breaks']
-            paragraph_breaks = dict_sample['paragraph_breaks']
-
-            # TODO: may add paragraph breaks later
-            breaks = sorted(sentence_breaks)
-            breaks = [0] + breaks + [len(document)]
-
-            sentences = []
-            for i, id_break in enumerate(breaks[:-1]):
-                start = breaks[i]
-                end = breaks[i + 1]
-                sentences.append(document[start:end])
 
             # print info
             # TODO: change color of logger info
@@ -226,30 +210,12 @@ def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,
 
         for idx,sample in enumerate(file_list,1):
 
-            dict_sample = json.loads(sample)
-            # use docuement vocab
-            answer = dict_sample['answer_sequence']
-            question = dict_sample['question_sequence']
-            document = dict_sample['document_sequence']
+            document,sentences,question,answer = prepare_sample(sample)
 
             # skip illed sample
             if len(document) == 0 or len(answer) == 0 or len(question) == 0:
                 illed_sample_num += 1
                 continue
-
-            sentence_breaks = dict_sample['sentence_breaks']
-            paragraph_breaks = dict_sample['paragraph_breaks']
-
-            # TODO: may add paragraph breaks later
-            breaks = sorted(sentence_breaks)
-            breaks = [0] + breaks + [len(document)]
-
-            sentences = []
-            for i, id_break in enumerate(breaks[:-1]):
-                start = breaks[i]
-                end = breaks[i + 1]
-                sentences.append(document[start:end])
-
 
             loss = train(sentences,question,answer,encoder_model,decoder_model,
                   encoder_optimizer,decoder_optimizer,criterion,args.use_cuda,MAX_LENGTH)
@@ -331,6 +297,33 @@ def load_glove_embeddings(embed_path):
     logger.info("Dimension: {}".format(glove.shape[1]))
     logger.info("Vocabulary: {}" .format(glove.shape[0]))
     return glove
+
+def prepare_sample(sample):
+    '''
+    parse json sample to document answer and question
+    :param json_line: sample line
+    :return: document sentences question answer
+    '''
+    dict_sample = json.loads(sample)
+    # use docuement vocab
+    answer = dict_sample['answer_sequence']
+    question = dict_sample['question_sequence']
+    document = dict_sample['document_sequence']
+
+    sentence_breaks = dict_sample['sentence_breaks']
+    paragraph_breaks = dict_sample['paragraph_breaks']
+
+    # TODO: may add paragraph breaks later
+    breaks = sorted(sentence_breaks)
+    breaks = [0] + breaks + [len(document)]
+
+    sentences = []
+    for i, id_break in enumerate(breaks[:-1]):
+        start = breaks[i]
+        end = breaks[i + 1]
+        sentences.append(document[start:end])
+
+    return document,sentences,question,answer
 
 if __name__ == "__main__":
 
