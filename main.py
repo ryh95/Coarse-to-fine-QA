@@ -15,12 +15,16 @@ import torch
 from torch.autograd import Variable
 from torch import optim
 from torch import nn
+from torch.nn.utils.rnn import pad_packed_sequence
 from tqdm import tqdm
 
 from model import EncoderModel, DecoderRNN
 
 EOS_token = 1
 SOS_token = 0
+# according to document.vocab
+PAD_token = 3
+
 MAX_LENGTH = 10
 teacher_forcing_ratio = 0.5
 
@@ -58,8 +62,17 @@ def train(document, question, answer, encoder, decoder, encoder_optimizer, decod
 
     loss = 0
 
-    document = Variable(torch.LongTensor(document))
-    document = document.cuda() if args.use_cuda else document
+    # pad document
+    # may use this later
+    # padded_document = pad_packed_sequence(document,False,padding_value=PAD_token)
+    max_s_length = max([len(s) for s in document])
+
+    padded_document = np.zeros((len(document),max_s_length),dtype=np.int)
+    for i in range(len(document)):
+        padded_document[i] = document[i] + [PAD_token]*(max_s_length-len(document[i]))
+
+    padded_document = Variable(torch.LongTensor(padded_document))
+    padded_document = padded_document.cuda() if args.use_cuda else padded_document
     question = Variable(torch.LongTensor(question))
     question = question.cuda() if args.use_cuda else question
     answer = Variable(torch.LongTensor(answer))
@@ -67,7 +80,7 @@ def train(document, question, answer, encoder, decoder, encoder_optimizer, decod
     answer_length = len(answer)
 
     # encoder encode
-    encoder_hidden = encoder(document,question,answer,use_cuda)
+    encoder_hidden = encoder(padded_document,question,answer,use_cuda)
 
     decoder_input = Variable(torch.LongTensor([[SOS_token]]))
 
@@ -75,8 +88,7 @@ def train(document, question, answer, encoder, decoder, encoder_optimizer, decod
 
     decoder_hidden = encoder_hidden
 
-    # use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-    use_teacher_forcing = False
+    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
 
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
@@ -122,9 +134,11 @@ def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,
 
     with open('./data/validation-0.json','r') as js_file:
 
-        n_iters = len(js_file.readlines())
+        file_list = js_file.readlines()
 
-        for idx,sample in enumerate(js_file):
+        n_iters = len(file_list)
+
+        for idx,sample in enumerate(file_list):
 
             dict_sample = json.loads(sample)
             # use docuement vocab
@@ -241,4 +255,4 @@ if __name__ == "__main__":
     decoder_model = DecoderRNN(embeddings, args.emb_size, args.hidden_size, len(vocab_list))
     decoder_model = decoder_model.cuda() if args.use_cuda else decoder_model
 
-    train_epoch(encoder_model,decoder_model,args.lr)
+    train_epoch(encoder_model,decoder_model,args.lr,50,50)
