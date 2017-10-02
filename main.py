@@ -1,8 +1,12 @@
 import argparse
 import json
 import logging
+
+import time
 from numpy import random
 from os.path import join
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 import os
 
@@ -105,22 +109,81 @@ def train(document, question, answer, encoder, decoder, encoder_optimizer, decod
     return loss.data[0] / answer_length
 
 
-def trainIters(encoder, decoder, n_iters, learning_rate=0.01):
+def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,print_every=100):
 
-
-    encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
-    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [variablesFromPair(random.choice(pairs))
-                      for i in range(n_iters)]
+    start = time.time()
+    encoder_optimizer = optim.SGD(encoder_model.parameters(), lr=learning_rate)
+    decoder_optimizer = optim.SGD(decoder_model.parameters(), lr=learning_rate)
     criterion = nn.NLLLoss()
 
-    for iter in range(1, n_iters + 1):
-        training_pair = training_pairs[iter - 1]
-        input_variable = training_pair[0]
-        target_variable = training_pair[1]
+    print_loss_total = 0  # Reset every print_every
+    plot_loss_total = 0  # Reset every plot_every
+    plot_losses = []
 
-        loss = train(input_variable, target_variable, encoder,
-                     decoder, encoder_optimizer, decoder_optimizer, criterion)
+    with open('./data/validation-0.json','r') as js_file:
+
+        n_iters = len(js_file.readlines())
+
+        for idx,sample in enumerate(js_file):
+
+            dict_sample = json.loads(sample)
+            # use docuement vocab
+            answer = dict_sample['answer_sequence']
+            question = dict_sample['question_sequence']
+            document = dict_sample['document_sequence']
+
+            sentence_breaks = dict_sample['sentence_breaks']
+            paragraph_breaks = dict_sample['paragraph_breaks']
+
+            # TODO: may add paragraph breaks later
+            breaks = sorted(sentence_breaks)
+            breaks = [0] + breaks + [len(document)]
+
+            sentences = []
+            for i, id_break in enumerate(breaks[:-1]):
+                start = breaks[i]
+                end = breaks[i + 1]
+                sentences.append(document[start:end])
+
+
+            loss = train(sentences,question,answer,encoder_model,decoder_model,
+                  encoder_optimizer,decoder_optimizer,criterion,args.use_cuda,MAX_LENGTH)
+
+            print_loss_total += loss
+            plot_loss_total += loss
+
+            if idx % print_every == 0:
+                print_loss_avg = print_loss_total / print_every
+                print_loss_total = 0
+                print('%s (%d %d%%) %.4f' % (timeSince(start, idx / n_iters),
+                                             idx, idx / n_iters * 100, print_loss_avg))
+
+            if idx % plot_every == 0:
+                plot_loss_avg = plot_loss_total / plot_every
+                plot_losses.append(plot_loss_avg)
+                plot_loss_total = 0
+
+        showPlot(plot_losses)
+
+def showPlot(points):
+    plt.figure()
+    fig, ax = plt.subplots()
+    # this locator puts ticks at regular intervals
+    loc = ticker.MultipleLocator(base=0.2)
+    ax.yaxis.set_major_locator(loc)
+    plt.plot(points)
+
+def timeSince(since, percent):
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
+
+def asMinutes(s):
+    m = np.math.floor(s / 60)
+    s -= m * 60
+    return '%dm %ds' % (m, s)
 
 def process_glove(args, vocab_list, save_path, random_init=True):
     """
@@ -178,32 +241,4 @@ if __name__ == "__main__":
     decoder_model = DecoderRNN(embeddings, args.emb_size, args.hidden_size, len(vocab_list))
     decoder_model = decoder_model.cuda() if args.use_cuda else decoder_model
 
-    encoder_optimizer = optim.SGD(encoder_model.parameters(), lr=args.lr)
-    decoder_optimizer = optim.SGD(decoder_model.parameters(), lr=args.lr)
-    criterion = nn.NLLLoss()
-
-    with open('./data/validation-0.json','r') as js_file:
-        for idx,sample in enumerate(js_file):
-
-            dict_sample = json.loads(sample)
-            # use docuement vocab
-            answer = dict_sample['answer_sequence']
-            question = dict_sample['question_sequence']
-            document = dict_sample['document_sequence']
-
-            sentence_breaks = dict_sample['sentence_breaks']
-            paragraph_breaks = dict_sample['paragraph_breaks']
-
-            # TODO: may add paragraph breaks later
-            breaks = sorted(sentence_breaks)
-            breaks = [0] + breaks + [len(document)]
-
-            sentences = []
-            for i, id_break in enumerate(breaks[:-1]):
-                start = breaks[i]
-                end = breaks[i + 1]
-                sentences.append(document[start:end])
-
-
-            loss = train(sentences,question,answer,encoder_model,decoder_model,
-                  encoder_optimizer,decoder_optimizer,criterion,args.use_cuda,MAX_LENGTH)
+    train_epoch(encoder_model,decoder_model,args.lr)
