@@ -33,6 +33,7 @@ class BoW(nn.Module):
         :return:
         '''
         question = question.expand(document.size(0),question.size(0))
+        # TODO: calculate using sum/len
         bow_x = torch.mean(self.embedding(question),1)
         bow_s = torch.mean(self.embedding(document),1)
 
@@ -49,6 +50,7 @@ class DocumentSummary(nn.Module):
         super(DocumentSummary,self).__init__()
 
     def forward(self, probability,emb_document):
+        probability = torch.unsqueeze(probability,-1)
         return torch.sum(probability*emb_document,0)
 
 
