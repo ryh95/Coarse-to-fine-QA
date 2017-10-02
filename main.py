@@ -269,7 +269,7 @@ def asMinutes(s):
     s -= m * 60
     return '%dm %ds' % (m, s)
 
-def process_glove(args, vocab_list, save_path, random_init=True):
+def process_glove(args, word2id, save_path, random_init=True):
     """
     :param vocab_list: [vocab]
     :return:
@@ -277,25 +277,25 @@ def process_glove(args, vocab_list, save_path, random_init=True):
     if not os.path.exists(save_path):
         glove_path = args.dwr_path
         if random_init:
-            glove = np.random.randn(len(vocab_list), args.emb_size)
+            glove = np.random.randn(len(word2id), args.emb_size)
         else:
-            glove = np.zeros((len(vocab_list), args.emb_size))
+            glove = np.zeros((len(word2id), args.emb_size))
         found = 0
         with open(glove_path, 'r') as fh:
-            for line in tqdm(fh):
+            for line in tqdm(fh,total=5e5):
                 array = line.lstrip().rstrip().split(" ")
                 word = array[0]
                 vector = list(map(float, array[1:]))
-                if word in vocab_list:
-                    idx = vocab_list.index(word)
+                if word in word2id:
+                    idx = word2id[word]
                     glove[idx, :] = vector
                     found += 1
-                if word.capitalize() in vocab_list:
-                    idx = vocab_list.index(word.capitalize())
+                if word.capitalize() in word2id:
+                    idx = word2id[word.capitalize()]
                     glove[idx, :] = vector
                     found += 1
-                if word.upper() in vocab_list:
-                    idx = vocab_list.index(word.upper())
+                if word.upper() in word2id:
+                    idx = word2id[word.upper()]
                     glove[idx, :] = vector
                     found += 1
 
@@ -340,10 +340,10 @@ def prepare_sample(sample):
 if __name__ == "__main__":
 
     args = parse_args()
-    # TODO: reinitialize embedding later
     vocab_list = initialize_vocabulary()
     id2word = {idx:word for idx,word in  enumerate(vocab_list)}
-    process_glove(args, vocab_list, args.emb_path)
+    word2id = {word:idx for idx,word in  enumerate(vocab_list)}
+    process_glove(args, word2id, args.emb_path)
 
     embeddings = load_glove_embeddings(args.emb_path)
 
@@ -352,7 +352,8 @@ if __name__ == "__main__":
     encoder_model = encoder_model.cuda() if args.use_cuda else encoder_model
     decoder_model = DecoderRNN(embeddings, args.emb_size, args.hidden_size, len(vocab_list))
     decoder_model = decoder_model.cuda() if args.use_cuda else decoder_model
-
+    # TODO: batch input inplementation
+    # TODO: placeholder inplementation
     train_epoch(encoder_model,decoder_model,args.lr,50,50)
 
     evaluateRandomly(encoder_model,id2word,decoder_model,args.use_cuda,num2eval=4)

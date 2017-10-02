@@ -50,7 +50,6 @@ class DocumentSummary(nn.Module):
         super(DocumentSummary,self).__init__()
 
     def forward(self, probability,emb_document):
-        # TODO : mask * emb_document
         probability = torch.unsqueeze(probability,-1)
         return torch.sum(probability*emb_document,0)
 
@@ -115,7 +114,7 @@ class EncoderModel(nn.Module):
     def forward(self, document,mask,question,use_cuda):
 
         probability = self.bow(document,mask,question,self.hidden_size)
-        summary = self.soft_attention(probability,self.embedding(document))
+        summary = self.soft_attention(probability,self.embedding(document)*torch.unsqueeze(mask,-1))
         # the encoder input is question and document summary
         _,encoder_hidden = self.encoder(torch.cat([self.embedding(question),summary],0),self.encoder.initHidden(use_cuda))
 
