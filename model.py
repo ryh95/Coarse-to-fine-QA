@@ -17,7 +17,7 @@ class BoW(nn.Module):
         self.softmax = nn.Softmax()
         self.embedding = embedding
 
-    def forward(self, document,question,hidden_size):
+    def forward(self, document,mask,question,hidden_size):
         '''
 
         :param document:
@@ -33,9 +33,9 @@ class BoW(nn.Module):
         :return:
         '''
         question = question.expand(document.size(0),question.size(0))
-        # TODO: calculate using sum/len
+
         bow_x = torch.mean(self.embedding(question),1)
-        bow_s = torch.mean(self.embedding(document),1)
+        bow_s = torch.sum(self.embedding(document)*torch.unsqueeze(mask,-1),1)/torch.sum(mask,1,keepdim=True)
 
         h = torch.cat((bow_x,bow_s),1)
         hidden = self.relu(self.layer_1(h))
@@ -50,6 +50,7 @@ class DocumentSummary(nn.Module):
         super(DocumentSummary,self).__init__()
 
     def forward(self, probability,emb_document):
+        # TODO : mask * emb_document
         probability = torch.unsqueeze(probability,-1)
         return torch.sum(probability*emb_document,0)
 
@@ -111,9 +112,9 @@ class EncoderModel(nn.Module):
         # input is embeddings dimension
         self.encoder = EncoderRNN(embeddings.shape[1],hidden_size)
 
-    def forward(self, document,question,use_cuda):
+    def forward(self, document,mask,question,use_cuda):
 
-        probability = self.bow(document,question,self.hidden_size)
+        probability = self.bow(document,mask,question,self.hidden_size)
         summary = self.soft_attention(probability,self.embedding(document))
         # the encoder input is question and document summary
         _,encoder_hidden = self.encoder(torch.cat([self.embedding(question),summary],0),self.encoder.initHidden(use_cuda))

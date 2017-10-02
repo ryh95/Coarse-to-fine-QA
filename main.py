@@ -68,11 +68,17 @@ def train(document, question, answer, encoder, decoder, encoder_optimizer, decod
     max_s_length = max([len(s) for s in document])
 
     padded_document = np.zeros((len(document),max_s_length),dtype=np.int)
+    mask_document = np.zeros((len(document),max_s_length),dtype=np.int)
     for i in range(len(document)):
         padded_document[i] = document[i] + [PAD_token]*(max_s_length-len(document[i]))
+        mask_document[i,:len(document[i])] = np.ones(len(document[i]),dtype=int)
 
     padded_document = Variable(torch.LongTensor(padded_document))
     padded_document = padded_document.cuda() if args.use_cuda else padded_document
+
+    mask_document = Variable(torch.FloatTensor(mask_document))
+    mask_document = mask_document.cuda() if args.use_cuda else mask_document
+
     question = Variable(torch.LongTensor(question))
     question = question.cuda() if args.use_cuda else question
     answer = Variable(torch.LongTensor(answer))
@@ -80,7 +86,7 @@ def train(document, question, answer, encoder, decoder, encoder_optimizer, decod
     answer_length = len(answer)
 
     # encoder encode
-    encoder_hidden = encoder(padded_document,question,use_cuda)
+    encoder_hidden = encoder(padded_document,mask_document,question,use_cuda)
 
     decoder_input = Variable(torch.LongTensor([[SOS_token]]))
 
@@ -129,16 +135,22 @@ def evaluate(document, question,encoder, id2word,decoder,use_cuda,max_length=MAX
     max_s_length = max([len(s) for s in document])
 
     padded_document = np.zeros((len(document), max_s_length), dtype=np.int)
+    mask_document = np.zeros((len(document), max_s_length), dtype=np.int)
     for i in range(len(document)):
         padded_document[i] = document[i] + [PAD_token] * (max_s_length - len(document[i]))
+        mask_document[i, :len(document[i])] = np.ones(len(document[i]), dtype=int)
 
     padded_document = Variable(torch.LongTensor(padded_document))
     padded_document = padded_document.cuda() if args.use_cuda else padded_document
+
+    mask_document = Variable(torch.FloatTensor(mask_document))
+    mask_document = mask_document.cuda() if args.use_cuda else mask_document
+
     question = Variable(torch.LongTensor(question))
     question = question.cuda() if args.use_cuda else question
 
     # encoder encode
-    encoder_hidden = encoder(padded_document, question, use_cuda)
+    encoder_hidden = encoder(padded_document, mask_document,question, use_cuda)
 
     decoder_input = Variable(torch.LongTensor([[SOS_token]]))
 
