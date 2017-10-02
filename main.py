@@ -80,7 +80,7 @@ def train(document, question, answer, encoder, decoder, encoder_optimizer, decod
     answer_length = len(answer)
 
     # encoder encode
-    encoder_hidden = encoder(padded_document,question,answer,use_cuda)
+    encoder_hidden = encoder(padded_document,question,use_cuda)
 
     decoder_input = Variable(torch.LongTensor([[SOS_token]]))
 
@@ -120,6 +120,91 @@ def train(document, question, answer, encoder, decoder, encoder_optimizer, decod
 
     return loss.data[0] / answer_length
 
+
+def evaluate(document, question,encoder, id2word,decoder,use_cuda,max_length=MAX_LENGTH):
+
+    # pad document
+    # may use this later
+    # padded_document = pad_packed_sequence(document,False,padding_value=PAD_token)
+    max_s_length = max([len(s) for s in document])
+
+    padded_document = np.zeros((len(document), max_s_length), dtype=np.int)
+    for i in range(len(document)):
+        padded_document[i] = document[i] + [PAD_token] * (max_s_length - len(document[i]))
+
+    padded_document = Variable(torch.LongTensor(padded_document))
+    padded_document = padded_document.cuda() if args.use_cuda else padded_document
+    question = Variable(torch.LongTensor(question))
+    question = question.cuda() if args.use_cuda else question
+
+    # encoder encode
+    encoder_hidden = encoder(padded_document, question, use_cuda)
+
+    decoder_input = Variable(torch.LongTensor([[SOS_token]]))
+
+    decoder_input = decoder_input.cuda() if args.use_cuda else decoder_input
+
+    decoder_hidden = encoder_hidden
+
+    decoded_words = []
+
+    for di in range(max_length):
+        decoder_output, decoder_hidden = decoder(
+            decoder_input, decoder_hidden)
+        topv, topi = decoder_output.data.topk(1)
+        ni = topi[0][0]
+        if ni == EOS_token:
+            decoded_words.append('</s>')
+            break
+        else:
+            decoded_words.append(id2word[ni])
+
+        decoder_input = Variable(torch.LongTensor([[ni]]))
+        decoder_input = decoder_input.cuda() if use_cuda else decoder_input
+
+    return decoded_words
+
+def evaluateRandomly(encoder, id2word,decoder,use_cuda,num2eval=10):
+
+    with open('./data/validation-1.json','r') as f:
+
+        file_list = f.readlines()
+
+        for _ in range(num2eval):
+
+            sample = random.choice(file_list)
+
+            dict_sample = json.loads(sample)
+            # use docuement vocab
+            answer = dict_sample['answer_sequence']
+            question = dict_sample['question_sequence']
+            document = dict_sample['document_sequence']
+
+            # skip illed sample
+            if len(document) == 0 or len(answer) == 0 or len(question) == 0:
+                continue
+
+            sentence_breaks = dict_sample['sentence_breaks']
+            paragraph_breaks = dict_sample['paragraph_breaks']
+
+            # TODO: may add paragraph breaks later
+            breaks = sorted(sentence_breaks)
+            breaks = [0] + breaks + [len(document)]
+
+            sentences = []
+            for i, id_break in enumerate(breaks[:-1]):
+                start = breaks[i]
+                end = breaks[i + 1]
+                sentences.append(document[start:end])
+
+            # print info
+            # TODO: change color of logger info
+            logger.info("Document: {}".format(' '.join(dict_sample['string_sequence']).encode('utf8')))
+            logger.info("Question: {}".format(' '.join(dict_sample['question_string_sequence']).encode('utf8')))
+            logger.info("Real Answer: {}".format(' '.join(dict_sample['answer_string_sequence']).encode('utf8')))
+
+            pred_answer = evaluate(sentences,question,encoder,id2word,decoder,use_cuda)
+            logger.info("Predicted: {}".format(' '.join(pred_answer).encode('utf8')))
 
 def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,print_every=100):
 
@@ -250,8 +335,9 @@ def load_glove_embeddings(embed_path):
 if __name__ == "__main__":
 
     args = parse_args()
-    # TODO: reinitialize vocab later
+    # TODO: reinitialize embedding later
     vocab_list = initialize_vocabulary()
+    id2word = {idx:word for idx,word in  enumerate(vocab_list)}
     process_glove(args, vocab_list, args.emb_path)
 
     embeddings = load_glove_embeddings(args.emb_path)
@@ -263,3 +349,5 @@ if __name__ == "__main__":
     decoder_model = decoder_model.cuda() if args.use_cuda else decoder_model
 
     train_epoch(encoder_model,decoder_model,args.lr,50,50)
+
+    evaluateRandomly(encoder_model,id2word,decoder_model,args.use_cuda,num2eval=4)

@@ -111,7 +111,7 @@ class EncoderModel(nn.Module):
         # input is embeddings dimension
         self.encoder = EncoderRNN(embeddings.shape[1],hidden_size)
 
-    def forward(self, document,question,answer,use_cuda):
+    def forward(self, document,question,use_cuda):
 
         probability = self.bow(document,question,self.hidden_size)
         summary = self.soft_attention(probability,self.embedding(document))
