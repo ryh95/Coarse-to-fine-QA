@@ -7,6 +7,7 @@ from numpy import random
 from os.path import join
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import cPickle
 
 import os
 
@@ -41,6 +42,7 @@ def parse_args():
     parser.add_argument('--bow_hidden_size',type=int,default=128)
     parser.add_argument('--hidden_size',type=int,default=200)
     parser.add_argument('--lr',type=float,default=0.01)
+    parser.add_argument('--use_placeholder',type=bool,default=True)
 
     args = parser.parse_args()
     embed_path = args.emb_path or join("data", "glove.trimmed.{}.npz".format(args.emb_size))
@@ -202,7 +204,7 @@ def evaluateRandomly(encoder, id2word,decoder,use_cuda,num2eval=10):
             pred_answer = evaluate(sentences,question,encoder,id2word,decoder,use_cuda)
             logger.info("Predicted: {}".format(' '.join(pred_answer).encode('utf8')))
 
-def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,print_every=100):
+def train_epoch(file_to_train,encoder_model, decoder_model, learning_rate=0.01,plot_every=100,print_every=100):
 
     start = time.time()
     encoder_optimizer = optim.SGD(encoder_model.parameters(), lr=learning_rate)
@@ -214,7 +216,7 @@ def train_epoch(encoder_model, decoder_model, learning_rate=0.01,plot_every=100,
     plot_losses = []
     illed_sample_num = 0
 
-    with open('./data/validation-0.json','r') as js_file:
+    with open(file_to_train,'r') as js_file:
 
         file_list = js_file.readlines()
 
@@ -340,20 +342,25 @@ def prepare_sample(sample):
 if __name__ == "__main__":
 
     args = parse_args()
-    vocab_list = initialize_vocabulary()
-    id2word = {idx:word for idx,word in  enumerate(vocab_list)}
-    word2id = {word:idx for idx,word in  enumerate(vocab_list)}
-    process_glove(args, word2id, args.emb_path)
-
-    embeddings = load_glove_embeddings(args.emb_path)
+    if args.use_placeholder:
+        id2word = cPickle.load(open('./data/place.id2word.pickle','r'))
+        emb_path = join("data", "place.glove.trimmed.{}.npz".format(args.emb_size))
+        embeddings = load_glove_embeddings(emb_path)
+        file_to_train = join("data", "validation-place-0.json")
+    else:
+        vocab_list = initialize_vocabulary()
+        id2word = {idx:word for idx,word in  enumerate(vocab_list)}
+        word2id = {word:idx for idx,word in  enumerate(vocab_list)}
+        process_glove(args, word2id, args.emb_path)
+        embeddings = load_glove_embeddings(args.emb_path)
+        file_to_train = join("data", "validation-0.json")
 
     # create model
     encoder_model = EncoderModel(embeddings, args.bow_hidden_size, args.hidden_size)
     encoder_model = encoder_model.cuda() if args.use_cuda else encoder_model
-    decoder_model = DecoderRNN(embeddings, args.emb_size, args.hidden_size, len(vocab_list))
+    decoder_model = DecoderRNN(embeddings, args.emb_size, args.hidden_size, len(id2word))
     decoder_model = decoder_model.cuda() if args.use_cuda else decoder_model
     # TODO: batch input inplementation
-    # TODO: placeholder inplementation
-    train_epoch(encoder_model,decoder_model,args.lr,50,50)
+    train_epoch(file_to_train,encoder_model,decoder_model,args.lr,50,50)
 
     evaluateRandomly(encoder_model,id2word,decoder_model,args.use_cuda,num2eval=4)
