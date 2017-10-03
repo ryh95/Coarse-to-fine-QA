@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import shutil
 
 import time
 from numpy import random
@@ -42,7 +43,10 @@ def parse_args():
     parser.add_argument('--bow_hidden_size',type=int,default=128)
     parser.add_argument('--hidden_size',type=int,default=200)
     parser.add_argument('--lr',type=float,default=0.01)
-    parser.add_argument('--use_placeholder',type=bool,default=True)
+    parser.add_argument('--use_placeholder',type=bool,default=False)
+    parser.add_argument('--start-epoch', default=0, type=int, help='manual epoch number (useful on restarts)')
+    parser.add_argument('--epoch_num', default=3, type=int,help='number of total epochs to run')
+    parser.add_argument('--resume', default='', type=str,help='path to latest checkpoint (default: none)')
 
     args = parser.parse_args()
     embed_path = args.emb_path or join("data", "glove.trimmed.{}.npz".format(args.emb_size))
@@ -204,12 +208,12 @@ def evaluateRandomly(encoder, id2word,decoder,use_cuda,num2eval=10):
             pred_answer = evaluate(sentences,question,encoder,id2word,decoder,use_cuda)
             logger.info("Predicted: {}".format(' '.join(pred_answer).encode('utf8')))
 
-def train_epoch(file_to_train,encoder_model, decoder_model, learning_rate=0.01,plot_every=100,print_every=100):
+def train_epoch(file_to_train,encoder_model, decoder_model,
+                encoder_optimizer,decoder_optimizer,criterion,
+                plot_every=100,print_every=100,
+                min_loss=float('inf')):
 
     start = time.time()
-    encoder_optimizer = optim.SGD(encoder_model.parameters(), lr=learning_rate)
-    decoder_optimizer = optim.SGD(decoder_model.parameters(), lr=learning_rate)
-    criterion = nn.NLLLoss()
 
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
@@ -231,6 +235,7 @@ def train_epoch(file_to_train,encoder_model, decoder_model, learning_rate=0.01,p
                 illed_sample_num += 1
                 continue
 
+            # loss is sample loss(average length)
             loss = train(sentences,question,answer,encoder_model,decoder_model,
                   encoder_optimizer,decoder_optimizer,criterion,args.use_cuda,MAX_LENGTH)
 
@@ -238,10 +243,13 @@ def train_epoch(file_to_train,encoder_model, decoder_model, learning_rate=0.01,p
             plot_loss_total += loss
 
             if idx % print_every == 0:
+                # print_loss_avg is average loss of 50 samples by default
                 print_loss_avg = print_loss_total / print_every
                 print_loss_total = 0
                 print('%s (%d %d%%) %.4f' % (timeSince(start, float(idx) / n_iters),
                                              idx, float(idx) / n_iters * 100, print_loss_avg))
+                if print_loss_avg < min_loss:
+                    min_loss = print_loss_avg
 
             if idx % plot_every == 0:
                 plot_loss_avg = plot_loss_total / plot_every
@@ -250,6 +258,7 @@ def train_epoch(file_to_train,encoder_model, decoder_model, learning_rate=0.01,p
 
         showPlot(plot_losses)
         logger.info("Illed sample number: {}".format(illed_sample_num))
+        return min_loss
 
 def showPlot(points):
     plt.figure()
@@ -270,6 +279,12 @@ def asMinutes(s):
     m = np.math.floor(s / 60)
     s -= m * 60
     return '%dm %ds' % (m, s)
+
+def save_checkpoint(state, is_best, filename,best_filename):
+    torch.save(state, filename)
+    if is_best:
+        logger.info("{} is {} now".format(best_filename,filename))
+        shutil.copyfile(filename, best_filename)
 
 def process_glove(args, word2id, save_path, random_init=True):
     """
@@ -360,7 +375,51 @@ if __name__ == "__main__":
     encoder_model = encoder_model.cuda() if args.use_cuda else encoder_model
     decoder_model = DecoderRNN(embeddings, args.emb_size, args.hidden_size, len(id2word))
     decoder_model = decoder_model.cuda() if args.use_cuda else decoder_model
-    # TODO: batch input inplementation
-    train_epoch(file_to_train,encoder_model,decoder_model,args.lr,50,50)
+    # TODO: batch input implementation
+    encoder_optimizer = optim.SGD(encoder_model.parameters(), lr=args.lr)
+    decoder_optimizer = optim.SGD(decoder_model.parameters(), lr=args.lr)
+    criterion = nn.NLLLoss()
+    min_loss = float('inf')
 
-    evaluateRandomly(encoder_model,id2word,decoder_model,args.use_cuda,num2eval=4)
+    best_checkpoint_path = join("checkpoint", "model_best.pth")
+
+    if args.resume:
+        if os.path.isfile(args.resume):
+            logger.info("Loading checkpoint '{}'".format(args.resume))
+            checkpoint = torch.load(args.resume)
+            args.start_epoch = checkpoint['epoch']
+            min_loss = checkpoint['min_loss']
+            encoder_model.load_state_dict(checkpoint['encoder_state_dict'])
+            decoder_model.load_state_dict(checkpoint['decoder_state_dict'])
+            encoder_optimizer.load_state_dict(checkpoint['encoder_optimizer'])
+            decoder_optimizer.load_state_dict(checkpoint['decoder_optimizer'])
+            logger.info("Loaded checkpoint '{}' (epoch {})"
+                  .format(args.resume, checkpoint['epoch']))
+            logger.info("Min_loss: {}".format(min_loss))
+        else:
+            logger.info("No checkpoint found at '{}'".format(args.resume))
+
+    for epoch in range(args.start_epoch,args.epoch_num):
+
+        min_loss_epoch = train_epoch(file_to_train,encoder_model,decoder_model,
+                               encoder_optimizer,decoder_optimizer,criterion,
+                               50,50,min_loss)
+        # save model
+        is_best = min_loss_epoch < min_loss
+        min_loss = min_loss_epoch if is_best else min_loss
+
+        logger.info("Min_loss_epoch: {}".format(min_loss_epoch))
+        logger.info("Min_loss: {}".format(min_loss))
+
+        checkpoint_path = join("checkpoint", 'ep'+str(epoch)+'_checkpoint.pth')
+
+        save_checkpoint({
+            'epoch': epoch,
+            'encoder_state_dict': encoder_model.state_dict(),
+            'decoder_stata_dict': decoder_model.state_dict(),
+            'min_loss': min_loss,
+            'encoder_optimizer': encoder_optimizer.state_dict(),
+            'decoder_optimizer': decoder_optimizer.state_dict(),
+        }, is_best,checkpoint_path,best_checkpoint_path)
+
+        evaluateRandomly(encoder_model,id2word,decoder_model,args.use_cuda,num2eval=4)
