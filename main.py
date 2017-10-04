@@ -45,7 +45,7 @@ def parse_args():
     parser.add_argument('--lr',type=float,default=0.01)
     parser.add_argument('--use_placeholder',type=bool,default=False)
     parser.add_argument('--start-epoch', default=0, type=int, help='manual epoch number (useful on restarts)')
-    parser.add_argument('--epoch_num', default=3, type=int,help='number of total epochs to run')
+    parser.add_argument('--epoch_num', default=4, type=int,help='number of total epochs to run')
     parser.add_argument('--resume', default='', type=str,help='path to latest checkpoint (default: none)')
 
     args = parser.parse_args()
@@ -383,11 +383,15 @@ if __name__ == "__main__":
 
     best_checkpoint_path = join("checkpoint", "model_best.pth")
 
+    # use best checkpoint path to resume (by default)
+    args.resume = best_checkpoint_path if os.path.exists(best_checkpoint_path) else args.resume
+
+    # load checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
             logger.info("Loading checkpoint '{}'".format(args.resume))
             checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
+            args.start_epoch = checkpoint['epoch'] + 1
             min_loss = checkpoint['min_loss']
             encoder_model.load_state_dict(checkpoint['encoder_state_dict'])
             decoder_model.load_state_dict(checkpoint['decoder_state_dict'])
@@ -416,7 +420,7 @@ if __name__ == "__main__":
         save_checkpoint({
             'epoch': epoch,
             'encoder_state_dict': encoder_model.state_dict(),
-            'decoder_stata_dict': decoder_model.state_dict(),
+            'decoder_state_dict': decoder_model.state_dict(),
             'min_loss': min_loss,
             'encoder_optimizer': encoder_optimizer.state_dict(),
             'decoder_optimizer': decoder_optimizer.state_dict(),
