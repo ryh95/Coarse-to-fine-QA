@@ -20,6 +20,7 @@ from torch import nn
 from torch.nn.utils.rnn import pad_packed_sequence
 from tqdm import tqdm
 
+import config
 from model import EncoderModel, DecoderRNN
 
 EOS_token = 1
@@ -49,15 +50,15 @@ def parse_args():
     parser.add_argument('--resume', default='', type=str,help='path to latest checkpoint (default: none)')
 
     args = parser.parse_args()
-    embed_path = args.emb_path or join("data", "glove.trimmed.{}.npz".format(args.emb_size))
+    embed_path = args.emb_path or join("data","dwr","glove.trimmed.{}.npz".format(args.emb_size))
     args.emb_path = embed_path
 
-    args.dwr_path = args.dwr_path or join("dwr", "glove.6B.{}d.txt".format(args.emb_size))
+    args.dwr_path = args.dwr_path or join("data","dwr", "glove.6B.{}d.txt".format(args.emb_size))
 
     return args
 
 def initialize_vocabulary():
-    with open('./data/document.vocab','r') as file:
+    with open(join("data","vocab","document.vocab"),'r') as file:
         return [line.split('\t')[1] for line in file]
 
 def train(document, question, answer, encoder, decoder, encoder_optimizer, decoder_optimizer,criterion,use_cuda,
@@ -182,9 +183,9 @@ def evaluate(document, question,encoder, id2word,decoder,use_cuda,max_length=MAX
 
     return decoded_words
 
-def evaluateRandomly(encoder, id2word,decoder,use_cuda,num2eval=10):
+def evaluateRandomly(file_to_evaluate,encoder, id2word,decoder,use_cuda,num2eval=10):
 
-    with open('./data/validation-1.json','r') as f:
+    with open(file_to_evaluate,'r') as f:
 
         file_list = f.readlines()
 
@@ -222,11 +223,9 @@ def train_epoch(file_to_train,encoder_model, decoder_model,
 
     with open(file_to_train,'r') as js_file:
 
-        file_list = js_file.readlines()
+        n_iters = config.TRAIN_NUM
 
-        n_iters = len(file_list)
-
-        for idx,sample in enumerate(file_list,1):
+        for idx,sample in enumerate(js_file,1):
 
             document,sentences,question,answer = prepare_sample(sample)
 
@@ -358,17 +357,19 @@ if __name__ == "__main__":
 
     args = parse_args()
     if args.use_placeholder:
-        id2word = cPickle.load(open('./data/place.id2word.pickle','r'))
-        emb_path = join("data", "place.glove.trimmed.{}.npz".format(args.emb_size))
+        id2word = cPickle.load(open(join("data","train","place.id2word.pickle"),'r'))
+        emb_path = join("data","dwr", "place.glove.trimmed.{}.npz".format(args.emb_size))
         embeddings = load_glove_embeddings(emb_path)
-        file_to_train = join("data", "validation-place-0.json")
+        file_to_train = join("data","train", "train_set_place.json")
+        file_to_evaluate = join("data","test", "test_set.json")
     else:
         vocab_list = initialize_vocabulary()
         id2word = {idx:word for idx,word in  enumerate(vocab_list)}
         word2id = {word:idx for idx,word in  enumerate(vocab_list)}
         process_glove(args, word2id, args.emb_path)
         embeddings = load_glove_embeddings(args.emb_path)
-        file_to_train = join("data", "validation-0.json")
+        file_to_train = join("data","train", "train_set.json")
+        file_to_evaluate = join("data", "test", "test_set.json")
 
     # create model
     encoder_model = EncoderModel(embeddings, args.bow_hidden_size, args.hidden_size)
@@ -381,7 +382,7 @@ if __name__ == "__main__":
     criterion = nn.NLLLoss()
     min_loss = float('inf')
 
-    best_checkpoint_path = join("checkpoint", "model_best.pth")
+    best_checkpoint_path = join("data","checkpoint", "model_best.pth")
 
     # use best checkpoint path to resume (by default)
     args.resume = best_checkpoint_path if os.path.exists(best_checkpoint_path) else args.resume
@@ -415,7 +416,7 @@ if __name__ == "__main__":
         logger.info("Min_loss_epoch: {}".format(min_loss_epoch))
         logger.info("Min_loss: {}".format(min_loss))
 
-        checkpoint_path = join("checkpoint", 'ep'+str(epoch)+'_checkpoint.pth')
+        checkpoint_path = join("data","checkpoint", 'ep'+str(epoch)+'_checkpoint.pth')
 
         save_checkpoint({
             'epoch': epoch,
@@ -426,4 +427,4 @@ if __name__ == "__main__":
             'decoder_optimizer': decoder_optimizer.state_dict(),
         }, is_best,checkpoint_path,best_checkpoint_path)
 
-        evaluateRandomly(encoder_model,id2word,decoder_model,args.use_cuda,num2eval=4)
+        evaluateRandomly(file_to_evaluate,encoder_model,id2word,decoder_model,args.use_cuda,num2eval=4)

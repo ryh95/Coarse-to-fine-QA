@@ -17,7 +17,7 @@ id2word = {idx:word for idx,word in  enumerate(vocab_list)}
 word2id = {word:idx for idx,word in  enumerate(vocab_list)}
 
 emb_size = 100
-emb_path = join("data", "glove.trimmed.{}.npz".format(emb_size))
+emb_path = join("data","dwr","glove.trimmed.{}.npz".format(emb_size))
 embeddings = load_glove_embeddings(emb_path)
 
 new_id = embeddings.shape[0]
@@ -43,8 +43,8 @@ def substitute(ids,tokens):
 
 if __name__ == '__main__':
 
-    with open('./data/validation-0.json','r') as f, \
-        open('./data/validation-place-0.json','w') as f_write:
+    with open(join("data","train","train_set.json"),'r') as f, \
+        open(join("data","train","train_set_place.json"),'w') as f_write:
         f_list = f.readlines()
         for sample in f_list:
             dict_sample = json.loads(sample)
@@ -61,10 +61,10 @@ if __name__ == '__main__':
             text = json.dumps(dict_sample)
             f_write.write(text+'\n')
 
-    save_path = join("data", "place.glove.trimmed.{}.npz".format(emb_size))
+    save_path = join("data","dwr","place.glove.trimmed.{}.npz".format(emb_size))
     np.savez_compressed(save_path, glove=embeddings)
 
-    cPickle.dump(word2id,open('./data/place.word2id.pickle','w'),True)
-    cPickle.dump(id2word,open('./data/place.id2word.pickle','w'),True)
+    cPickle.dump(word2id,open(join("data","train","place.word2id.pickle"),'w'),True)
+    cPickle.dump(id2word,open(join("data","train","place.id2word.pickle"),'w'),True)
 
 

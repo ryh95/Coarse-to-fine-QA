@@ -6,12 +6,14 @@ import numpy as np
 
 # change as you like
 # since dataset is huge, use validation to train and test
+import config
+
 file_to_split = join("../","data","original_data","validation-00000-of-00015.json")
 train_path = join("../","data","train","train_set.json")
 test_path = join("../","data","test","test_set.json")
-train_sample = 10000
-test_sample = 400
-early_stop_num = 100000
+train_sample = config.TRAIN_NUM
+test_sample = config.TEST_NUM
+early_stop_num = config.EARLY_STOP_NUM
 
 correct_sample_num = 0
 
