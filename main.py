@@ -335,6 +335,7 @@ def prepare_sample(sample):
     dict_sample = json.loads(sample)
     # use docuement vocab
     answer = dict_sample['answer_sequence']
+    answer.append(EOS_token)
     question = dict_sample['question_sequence']
     document = dict_sample['document_sequence']
 
