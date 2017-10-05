@@ -383,6 +383,10 @@ if __name__ == "__main__":
     criterion = nn.NLLLoss()
     min_loss = float('inf')
 
+    # create checkpoint path
+    if not os.path.exists(join("data","checkpoint")):
+        os.makedirs(join("data","checkpoint"))
+
     best_checkpoint_path = join("data","checkpoint", "model_best.pth")
 
     # use best checkpoint path to resume (by default)

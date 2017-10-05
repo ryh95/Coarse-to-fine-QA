@@ -1,6 +1,7 @@
 import json
 import logging
 from os.path import join
+import os
 
 import numpy as np
 
@@ -9,8 +10,8 @@ import numpy as np
 import config
 
 file_to_split = join("../","data","original_data","validation-00000-of-00015.json")
-train_path = join("../","data","train","train_set.json")
-test_path = join("../","data","test","test_set.json")
+train_path = join("../","data","train")
+test_path = join("../","data","test")
 train_sample = config.TRAIN_NUM
 test_sample = config.TEST_NUM
 early_stop_num = config.EARLY_STOP_NUM
@@ -46,8 +47,13 @@ with open(file_to_split,'r') as js_file:
     print N
     print correct_sample_num
 
-    with open(train_path, 'w') as f_train,\
-        open(test_path,'w') as f_test:
+    if not os.path.exists(train_path):
+        os.makedirs(train_path)
+    if not os.path.exists(test_path):
+        os.makedirs(test_path)
+
+    with open(join(train_path,"train_set.json"), 'w') as f_train,\
+        open(join(test_path,"test_set.json"),'w') as f_test:
         sample_indices = np.random.choice(N, train_sample+test_sample, replace=False)
 
         for indice in sample_indices[:train_sample]:
