@@ -6,6 +6,9 @@ This is an unofficial implementation of paper [Coarse-to-Fine Question Answering
 
 1. get_data.sh
 2. create_train_and_test.py(need to adjust config.py)
+
+    python -m tools.create_train_and_test.py
+
 3. get_dwr.py
 4. main.py
 

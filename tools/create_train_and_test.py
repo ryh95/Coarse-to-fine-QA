@@ -9,9 +9,9 @@ import numpy as np
 # since dataset is huge, use validation to train and test
 import config
 
-file_to_split = join("../","data","original_data","validation-00000-of-00015.json")
-train_path = join("../","data","train")
-test_path = join("../","data","test")
+file_to_split = join("data","original_data","validation-00000-of-00015.json")
+train_path = join("data","train")
+test_path = join("data","test")
 train_sample = config.TRAIN_NUM
 test_sample = config.TEST_NUM
 early_stop_num = config.EARLY_STOP_NUM
