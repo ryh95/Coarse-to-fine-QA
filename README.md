@@ -5,12 +5,20 @@ This is an unofficial implementation of paper [Coarse-to-Fine Question Answering
 ## How to use ?
 
 1. get_data.sh
+
+    ./get_data.sh
+
 2. create_train_and_test.py(need to adjust config.py)
 
-    python -m tools.create_train_and_test.py
+    python -m tools.create_train_and_test
 
 3. get_dwr.py
+
+    python -m tools.get_dwr
+
 4. main.py
+
+    python main.py
 
 Placeholder version:
 1. update_data.py(after previous step)
