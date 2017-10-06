@@ -254,8 +254,8 @@ def train_epoch(file_to_train,encoder_model, decoder_model,
                 plot_loss_avg = plot_loss_total / plot_every
                 plot_losses.append(plot_loss_avg)
                 plot_loss_total = 0
-
-        showPlot(plot_losses)
+        # temporarily disable this on server
+        # showPlot(plot_losses)
         logger.info("Illed sample number: {}".format(illed_sample_num))
         return min_loss
 
@@ -334,10 +334,14 @@ def prepare_sample(sample):
     '''
     dict_sample = json.loads(sample)
     # use docuement vocab
-    answer = dict_sample['answer_sequence']
-    answer.append(EOS_token)
-    question = dict_sample['question_sequence']
-    document = dict_sample['document_sequence']
+    # some samples don't have these
+    try:
+        answer = dict_sample['answer_sequence']
+        answer.append(EOS_token)
+        question = dict_sample['question_sequence']
+        document = dict_sample['document_sequence']
+    except KeyError:
+        return [],[[]],[],[]
 
     sentence_breaks = dict_sample['sentence_breaks']
     paragraph_breaks = dict_sample['paragraph_breaks']
